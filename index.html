@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>日本の鉄道駅の変遷マップ</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <!-- MapLibre -->
+    <script src='https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.js'></script>
+    <link href='https://unpkg.com/maplibre-gl@2.4.0/dist/maplibre-gl.css' rel='stylesheet' />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <style>
+        .map-overlay {
+            font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            position: absolute;
+            width: auto;
+            top: 0;
+            left: 0;
+            padding: 10px;
+        }
+
+        .map-overlay .map-overlay-inner {
+            background-color: #fff;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+            padding: 10px;
+            margin-bottom: 5px;
+        }
+
+        .map-overlay h3 {
+            line-height: 12px;
+            display: block;
+            margin: 0 0 10px;
+        }
+
+        .map-overlay .legend .bar {
+            height: 10px;
+            width: 100%;
+            background: linear-gradient(to right, #CCFFCC, #00ff00);
+        }
+
+        .map-overlay input {
+            background-color: transparent;
+            display: inline-block;
+            width: 100%;
+            position: relative;
+            margin: 0;
+            cursor: ew-resize;
+        }
+
+        .maplibregl-popup .maplibregl-popup-content {
+            padding: 8px 10px;
+            font: 12px/14px Arial, Helvetica, sans-serif;
+            color: black;
+            background: white;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.9);
+            border-radius: 5px;
+            width: 250px;
+            height: 200px;
+            overflow: scroll;
+        }
+
+        .label-large {
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        th,
+        td {
+            border: solid 1px;
+        }
+
+        table {
+            font-size: 8pt;
+            width: 240px;
+            border-collapse: collapse;
+        }
+    </style>
+
+    <div id="map"></div>
+    <div class="map-overlay top">
+        <div class="map-overlay-inner">
+            <h3>日本の鉄道駅の変遷マップ</h3>
+            <label id="year_label" class="label-large"></label>
+            <input id="slider" type="range" min="1872" max="2021" step="1" value="1872">
+        </div>
+    </div>
+    <script src="https://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <script>
+        var map = new maplibregl.Map({
+            container: 'map',
+            // style: './style/dark.json',
+            // style: 'https://api.maptiler.com/maps/darkmatter/style.json?key=3vP7xaDm3gASNdwulEW1',
+            style: 'https://api.maptiler.com/maps/jp-mierune-dark/style.json?key=3vP7xaDm3gASNdwulEW1',
+            center: [139.6226196, 35.4660694], // 中心座標
+            zoom: 6, // ズームレベル
+            pitch: 0, // 傾き
+            hash: true,
+            // 既存Attributionを非表示
+            attributionControl: false
+        })
+
+        // ズーム・回転
+        map.addControl(new maplibregl.NavigationControl());
+
+        // フルスクリーンモードのオンオフ
+        map.addControl(new maplibregl.FullscreenControl());
+
+        // 現在位置表示
+        map.addControl(new maplibregl.GeolocateControl({
+            positionOptions: {
+                enableHighAccuracy: false
+            },
+            fitBoundsOptions: { maxZoom: 18 },
+            trackUserLocation: true,
+            showUserLocation: true
+        }));
+
+        // スケール表示
+        map.addControl(new maplibregl.ScaleControl({
+            maxWidth: 200,
+            unit: 'metric'
+        }));
+
+        // Attributionを折りたたみ表示
+        map.addControl(new maplibregl.AttributionControl({
+            compact: true
+        }));
+
+        function filterBy(year) {
+            const filter = ['all',
+                ['>', ['to-number', ['get', 'N05_004']], 999],
+                ['<=', ['to-number', ['get', 'N05_004']], year],
+                ['>=', ['to-number', ['get', 'N05_005e']], year]
+            ]; // 供用開始年、設置期間（設置終了）
+            map.setFilter('station-points-1', filter);
+            map.setFilter('station-points-2', filter);
+            map.setFilter('station-points-3', filter);
+            map.setFilter('station-labels', filter);
+
+            // スライダー表示用ラベル
+            document.getElementById('year_label').textContent = year.toString() + '年';
+        }
+
+        map.on('load', () => {
+            d3.json(
+                './data/N05-21_Station2.geojson',
+                jsonCallback
+            );
+        });
+
+        function jsonCallback(data) {
+            map.addSource('station', {
+                'type': 'geojson',
+                'data': data,
+                attribution: '<a href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N05-v2_0.html">国土数値情報 鉄道時系列データ</a>'
+            });
+
+            // 鉄道駅ポイント
+            map.addLayer({
+                'id': 'station-points-1',
+                'type': 'circle',
+                'source': 'station',
+                'paint': {
+                    'circle-color': 'rgba(153, 255, 255, 1)',
+                    'circle-radius': 14,
+                    'circle-blur': 3,
+                    'circle-opacity': 0.4
+                }
+            });
+
+            // 鉄道駅ポイント
+            map.addLayer({
+                'id': 'station-points-2',
+                'type': 'circle',
+                'source': 'station',
+                'paint': {
+                    'circle-color': 'rgba(50, 255, 255, 1)',
+                    'circle-radius': 7,
+                    'circle-blur': 1.5,
+                    'circle-opacity': 0.4
+                }
+            });
+
+            // 鉄道駅ポイント
+            map.addLayer({
+                'id': 'station-points-3',
+                'type': 'circle',
+                'source': 'station',
+                'paint': {
+                    'circle-color': 'rgba(255, 255, 255, 1)',
+                    'circle-radius': 1.5,
+                    'circle-blur': 0,
+                    'circle-opacity': 1
+                }
+            });
+
+            // 鉄道駅ラベル
+            map.addLayer({
+                'id': 'station-labels',
+                'type': 'symbol',
+                'source': 'station',
+                'layout': {
+                    'text-field': ['concat', ['to-string', ['get', 'N05_011']]],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 10,
+                    'text-offset': [0, -1.2]
+                },
+                'paint': {
+                    'text-color': 'rgba(0,0,0,0.5)',
+                    'text-color': 'rgba(255,255,255,0.8)'
+                }
+            });
+
+            // フィルター実行
+            filterBy(1872); // 初期表示
+            document.getElementById('slider').addEventListener('input', (e) => {
+                const year = parseInt(e.target.value, 10); // スライダーで選択した年次を整数化
+                filterBy(year);
+            });
+
+            map.on('click', 'station-points-1', (e) => {
+                var lng = e.lngLat.lng;
+                var lat = e.lngLat.lat;
+                var N05_001 = e.features[0].properties['N05_001'];
+                var N05_002 = e.features[0].properties['N05_002'];
+                var N05_003 = e.features[0].properties['N05_003'];
+                var N05_004 = e.features[0].properties['N05_004'];
+                var N05_005b = e.features[0].properties['N05_005b'];
+                var N05_005e = e.features[0].properties['N05_005e'];
+                var N05_011 = e.features[0].properties['N05_011'];
+
+                if (N05_001 === '1') {
+                    N05_001 = '新幹線（旧国鉄）'
+                } else if (N05_001 === '2') {
+                    N05_001 = 'JR在来線（旧国鉄含む）'
+                } else if (N05_001 === '3') {
+                    N05_001 = '公営鉄道'
+                } else if (N05_001 === '4') {
+                    N05_001 = '民営鉄道'
+                } else if (N05_001 === '5') {
+                    N05_001 = '第三セクター'
+                }
+
+                if (N05_005e === '9999') {
+                    N05_005e = '現存'
+                }
+
+                new maplibregl.Popup()
+                    .setLngLat(e.lngLat)
+                    .setHTML(
+                        // 表形式
+                        '<table>' +
+                        '<tr>' + '<th>' + '項目' + '</th> ' + '<th>' + '内容' + '</th> ' + '</tr>' +
+                        '<tr>' + '<td>' + '事業者種別' + '</td> ' + '<td>' + N05_001 + '</td> ' + '</tr>' +
+                        '<tr>' + '<td>' + '路線名' + '</td> ' + '<td>' + N05_002 + '</td> ' + '</tr>' +
+                        '<tr>' + '<td>' + '運営会社' + '</td> ' + '<td>' + N05_003 + '</td> ' + '</tr>' +
+                        '<tr>' + '<td>' + '供用開始年' + '</td> ' + '<td>' + N05_004 + '</td> ' + '</tr>' +
+                        '<tr>' + '<td>' + '設置期間(設置開始)' + '</td> ' + '<td>' + N05_005b + '</td> ' + '</tr>' +
+                        '<tr>' + '<td>' + '設置期間(設置終了)' + '</td> ' + '<td>' + N05_005e + '</td> ' + '</tr>' +
+                        '<tr>' + '<td>' + '駅名' + '</td> ' + '<td>' + N05_011 + '</td> ' + '</tr>' +
+                        '<table>'
+                        + '座標: ' + lat.toFixed(7) + "," + lng.toFixed(7) + '<br>※クリック位置の座標<br>'
+                        + '<a href=\https://www.google.com/maps?q=' + lat + "," + lng + "&hl=ja' target='_blank'>🌎Google Maps</a>" + ' '
+                        + '<a href=\https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + lat + "," + lng + "&hl=ja' target='_blank'>📷Street View</a>"
+                    )
+                    .addTo(map);
+            });
+
+        }
+    </script>
+
+</body>
+
+</html>
